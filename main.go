@@ -9,8 +9,9 @@ import (
 )
 
 type Message struct {
-	ID   int    `json:"id"`
-	Text string `json:"text"`
+	gorm.Model
+	Task   string `json:"task"`
+	IsDone bool   `json:"isDone"`
 }
 
 type Response struct {
