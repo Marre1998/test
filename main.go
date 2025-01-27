@@ -1,37 +1,110 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"github.com/labstack/echo/v4"
 	"net/http"
+	"strconv"
 )
 
-var task string
+type Message struct {
+	ID   int    `json:"id"`
+	Text string `json:"text"`
+}
 
-type requestBody struct {
+type Response struct {
+	Status  string `json:"status"`
 	Message string `json:"message"`
 }
 
-func PostHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		var req requestBody
-		err := json.NewDecoder(r.Body).Decode(&req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		task = req.Message
+var messages = make(map[int]Message)
+var nextID = 1
+
+func GetHandler(c echo.Context) error {
+	var msgSlice []Message
+	for _, msg := range messages {
+		msgSlice = append(msgSlice, msg)
 	}
+	return c.JSON(http.StatusOK, &msgSlice)
 }
-func GetHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		fmt.Fprintln(w, "Hello,", task)
+
+func PostHandler(c echo.Context) error {
+	var message Message
+	if err := c.Bind(&message); err != nil {
+		return c.JSON(http.StatusBadRequest, Response{
+			Status:  "error",
+			Message: "Could not bind message",
+		})
 	}
+	message.ID = nextID
+	nextID++
+
+	messages[message.ID] = message
+	return c.JSON(http.StatusOK, Response{
+		Status:  "ok",
+		Message: "Message successfully sent",
+	})
+}
+
+func PatchHandler(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, Response{
+			Status:  "error",
+			Message: "Could not convert id to int",
+		})
+	}
+	var updatedMessage Message
+	if err := c.Bind(&updatedMessage); err != nil {
+		return c.JSON(http.StatusBadRequest, Response{
+			Status:  "error",
+			Message: "Could not bind message",
+		})
+	}
+
+	if _, ok := messages[id]; !ok {
+		return c.JSON(http.StatusBadRequest, Response{
+			Status:  "error",
+			Message: "Could not find message",
+		})
+	}
+	updatedMessage.ID = id
+	messages[id] = updatedMessage
+
+	return c.JSON(http.StatusOK, Response{
+		Status:  "ok",
+		Message: "Message successfully sent",
+	})
+
+}
+
+func DeleteHandler(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, Response{
+			Status:  "error",
+			Message: "Could not convert id to int",
+		})
+	}
+	if _, ok := messages[id]; !ok {
+		return c.JSON(http.StatusBadRequest, Response{
+			Status:  "error",
+			Message: "Could not find message",
+		})
+	}
+	delete(messages, id)
+	return c.JSON(http.StatusOK, Response{
+		Status:  "ok",
+		Message: "Message successfully deleted",
+	})
 }
 
 func main() {
-	http.HandleFunc("/", GetHandler)
-	http.HandleFunc("/task", PostHandler)
-
-	http.ListenAndServe(":8080", nil)
+	e := echo.New()
+	e.GET("/", GetHandler)
+	e.POST("/", PostHandler)
+	e.PATCH("/:id", PatchHandler)
+	e.DELETE("/:id", DeleteHandler)
+	e.Start(":8080")
 }
