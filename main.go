@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/labstack/echo/v4"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 )
@@ -16,15 +18,29 @@ type Response struct {
 	Message string `json:"message"`
 }
 
-var messages = make(map[int]Message)
-var nextID = 1
+var db *gorm.DB
+
+func initDB() {
+	dsn := "host=localhost user=postgres password=yourpassword dbname=postgres port=5432 sslmode=disable"
+	var err error
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		panic("failed to connect database")
+	}
+
+	db.AutoMigrate(&Message{})
+}
 
 func GetHandler(c echo.Context) error {
-	var msgSlice []Message
-	for _, msg := range messages {
-		msgSlice = append(msgSlice, msg)
+	var messages []Message
+
+	if err := db.Find(&messages).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, Response{
+			Status:  "error",
+			Message: "Failed to get all messages",
+		})
 	}
-	return c.JSON(http.StatusOK, &msgSlice)
+	return c.JSON(http.StatusOK, &messages)
 }
 
 func PostHandler(c echo.Context) error {
@@ -35,10 +51,13 @@ func PostHandler(c echo.Context) error {
 			Message: "Could not bind message",
 		})
 	}
-	message.ID = nextID
-	nextID++
 
-	messages[message.ID] = message
+	if err := db.Create(&message).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, Response{
+			Status:  "error",
+			Message: "Failed to create message",
+		})
+	}
 	return c.JSON(http.StatusOK, Response{
 		Status:  "ok",
 		Message: "Message successfully sent",
@@ -62,14 +81,12 @@ func PatchHandler(c echo.Context) error {
 		})
 	}
 
-	if _, ok := messages[id]; !ok {
-		return c.JSON(http.StatusBadRequest, Response{
+	if err := db.Model(&Message{}).Where("id = ?", id).Updates(updatedMessage).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, Response{
 			Status:  "error",
-			Message: "Could not find message",
+			Message: "Failed to update message",
 		})
 	}
-	updatedMessage.ID = id
-	messages[id] = updatedMessage
 
 	return c.JSON(http.StatusOK, Response{
 		Status:  "ok",
@@ -87,13 +104,13 @@ func DeleteHandler(c echo.Context) error {
 			Message: "Could not convert id to int",
 		})
 	}
-	if _, ok := messages[id]; !ok {
-		return c.JSON(http.StatusBadRequest, Response{
+
+	if err := db.Delete(&Message{}, id).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, Response{
 			Status:  "error",
-			Message: "Could not find message",
+			Message: "Failed to delete message",
 		})
 	}
-	delete(messages, id)
 	return c.JSON(http.StatusOK, Response{
 		Status:  "ok",
 		Message: "Message successfully deleted",
@@ -101,6 +118,7 @@ func DeleteHandler(c echo.Context) error {
 }
 
 func main() {
+	initDB()
 	e := echo.New()
 	e.GET("/", GetHandler)
 	e.POST("/", PostHandler)
