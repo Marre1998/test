@@ -2,40 +2,19 @@ package main
 
 import (
 	"github.com/labstack/echo/v4"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 )
-
-type Message struct {
-	gorm.Model
-	Task   string `json:"task"`
-	IsDone bool   `json:"isDone"`
-}
 
 type Response struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 }
 
-var db *gorm.DB
-
-func initDB() {
-	dsn := "host=localhost user=postgres password=yourpassword dbname=postgres port=5432 sslmode=disable"
-	var err error
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		panic("failed to connect database")
-	}
-
-	db.AutoMigrate(&Message{})
-}
-
 func GetHandler(c echo.Context) error {
 	var messages []Message
 
-	if err := db.Find(&messages).Error; err != nil {
+	if err := DB.Find(&messages).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, Response{
 			Status:  "error",
 			Message: "Failed to get all messages",
@@ -53,7 +32,7 @@ func PostHandler(c echo.Context) error {
 		})
 	}
 
-	if err := db.Create(&message).Error; err != nil {
+	if err := DB.Create(&message).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, Response{
 			Status:  "error",
 			Message: "Failed to create message",
@@ -82,7 +61,7 @@ func PatchHandler(c echo.Context) error {
 		})
 	}
 
-	if err := db.Model(&Message{}).Where("id = ?", id).Updates(updatedMessage).Error; err != nil {
+	if err := DB.Model(&Message{}).Where("id = ?", id).Updates(updatedMessage).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, Response{
 			Status:  "error",
 			Message: "Failed to update message",
@@ -106,7 +85,7 @@ func DeleteHandler(c echo.Context) error {
 		})
 	}
 
-	if err := db.Delete(&Message{}, id).Error; err != nil {
+	if err := DB.Delete(&Message{}, id).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, Response{
 			Status:  "error",
 			Message: "Failed to delete message",
@@ -119,7 +98,10 @@ func DeleteHandler(c echo.Context) error {
 }
 
 func main() {
-	initDB()
+	InitDB()
+
+	DB.AutoMigrate(&Message{})
+	
 	e := echo.New()
 	e.GET("/", GetHandler)
 	e.POST("/", PostHandler)
