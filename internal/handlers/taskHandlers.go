@@ -84,8 +84,5 @@ func (h *Handler) DeleteTaskHandler(c echo.Context) error {
 			Message: err.Error(),
 		})
 	}
-	return c.JSON(http.StatusOK, Response{
-		Status:  "success",
-		Message: "Task deleted",
-	})
+	return c.JSON(http.StatusNoContent, Response{})
 }
