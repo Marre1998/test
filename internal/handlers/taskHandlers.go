@@ -2,87 +2,89 @@ package handlers
 
 import (
 	"PetProject/internal/taskService"
-	"github.com/labstack/echo/v4"
-	"net/http"
-	"strconv"
+	"PetProject/internal/web/tasks"
+	"context"
+	"errors"
+	"gorm.io/gorm"
 )
-
-type Response struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
 
 type Handler struct {
 	Service *taskService.TaskService
 }
 
+func (h *Handler) GetTasks(_ context.Context, _ tasks.GetTasksRequestObject) (tasks.GetTasksResponseObject, error) {
+	allTasks, err := h.Service.GetAllTasks()
+	if err != nil {
+		return nil, err
+	}
+	response := tasks.GetTasks200JSONResponse{}
+
+	for _, tsk := range allTasks {
+		task := tasks.Task{
+			Id:     &tsk.ID,
+			Task:   &tsk.Task,
+			IsDone: &tsk.IsDone,
+		}
+		response = append(response, task)
+	}
+	return response, nil
+}
+
+func (h *Handler) PostTasks(_ context.Context, request tasks.PostTasksRequestObject) (tasks.PostTasksResponseObject, error) {
+	if request.Body == nil {
+		return nil, errors.New("invalid request body")
+	}
+	taskToCreate := taskService.Task{
+		Task:   *request.Body.Task,
+		IsDone: *request.Body.IsDone,
+	}
+	createdTask, err := h.Service.CreateTask(taskToCreate)
+	if err != nil {
+		return nil, err
+	}
+	response := tasks.PostTasks201JSONResponse{
+		Id:     &createdTask.ID,
+		Task:   &createdTask.Task,
+		IsDone: &createdTask.IsDone,
+	}
+	return response, nil
+}
+
+func (h *Handler) DeleteTasksId(_ context.Context, request tasks.DeleteTasksIdRequestObject) (tasks.DeleteTasksIdResponseObject, error) {
+	err := h.Service.DeleteTaskByID(request.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return tasks.DeleteTasksId404Response{Message: "Task not found"}, nil
+		}
+		return nil, err
+	}
+	return tasks.DeleteTasksId204Response{}, nil
+}
+
+func (h *Handler) PatchTasksId(_ context.Context, request tasks.PatchTasksIdRequestObject) (tasks.PatchTasksIdResponseObject, error) {
+	if request.Body == nil {
+		return nil, errors.New("invalid request body")
+	}
+
+	taskUpdate := taskService.Task{
+		Task:   *request.Body.Task,
+		IsDone: *request.Body.IsDone,
+	}
+	updatedTask, err := h.Service.UpdateTaskByID(request.Id, taskUpdate)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return tasks.PatchTasksId404Response{}, nil
+		}
+		return nil, err
+	}
+	response := tasks.PatchTasksId200JSONResponse{
+		Id:     &updatedTask.ID,
+		Task:   &updatedTask.Task,
+		IsDone: &updatedTask.IsDone,
+	}
+	return response, nil
+}
+
 func NewHandler(service *taskService.TaskService) *Handler {
-	return &Handler{service}
-}
-
-func (h *Handler) GetTaskHandler(c echo.Context) error {
-	tasks, err := h.Service.GetAllTasks()
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: err.Error(),
-		})
-	}
-	return c.JSON(http.StatusOK, tasks)
-}
-
-func (h *Handler) CreateTaskHandler(c echo.Context) error {
-	var task taskService.Task
-	if err := c.Bind(&task); err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: "invalid request body",
-		})
-	}
-	createdTask, err := h.Service.CreateTask(task)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: err.Error(),
-		})
-	}
-	return c.JSON(http.StatusOK, createdTask)
-}
-
-func (h *Handler) UpdateTaskHandler(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
-	var task taskService.Task
-	if err := c.Bind(&task); err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: "invalid request body",
-		})
-	}
-	updatedTask, err := h.Service.UpdateTaskByID(uint(id), task)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: err.Error(),
-		})
-	}
-	return c.JSON(http.StatusOK, updatedTask)
-}
-
-func (h *Handler) DeleteTaskHandler(c echo.Context) error {
-	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: "Could not convert id to int",
-		})
-	}
-	if err := h.Service.DeleteTaskByID(uint(id)); err != nil {
-		return c.JSON(http.StatusInternalServerError, Response{
-			Status:  "error",
-			Message: err.Error(),
-		})
-	}
-	return c.JSON(http.StatusNoContent, Response{})
+	return &Handler{Service: service}
 }
