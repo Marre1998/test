@@ -51,10 +51,10 @@ func (h *Handler) PostTasks(_ context.Context, request tasks.PostTasksRequestObj
 }
 
 func (h *Handler) DeleteTasksId(_ context.Context, request tasks.DeleteTasksIdRequestObject) (tasks.DeleteTasksIdResponseObject, error) {
-	err := h.Service.DeleteTaskByID(request.Id)
+	err := h.Service.DeleteTaskByID(uint(request.Id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return tasks.DeleteTasksId404Response{Message: "Task not found"}, nil
+			return tasks.DeleteTasksId404Response{}, nil
 		}
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (h *Handler) PatchTasksId(_ context.Context, request tasks.PatchTasksIdRequ
 		Task:   *request.Body.Task,
 		IsDone: *request.Body.IsDone,
 	}
-	updatedTask, err := h.Service.UpdateTaskByID(request.Id, taskUpdate)
+	updatedTask, err := h.Service.UpdateTaskByID(uint(request.Id), taskUpdate)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return tasks.PatchTasksId404Response{}, nil
