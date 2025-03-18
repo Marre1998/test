@@ -37,7 +37,7 @@ func (r *userRepository) UpdateUserByID(id uint, user User) (User, error) {
 }
 
 func (r *userRepository) DeleteUserByID(id uint) error {
-	result := r.db.Delete(&User{}, id)
+	result := r.db.Select("Tasks").Delete(&User{}, id) // GORM удалит задачи автоматически
 	if result.Error != nil {
 		return result.Error
 	}
