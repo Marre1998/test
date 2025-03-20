@@ -27,7 +27,7 @@ func (r *taskRepository) CreateTask(task Task) (Task, error) {
 
 func (r *taskRepository) GetAllTasks() ([]Task, error) {
 	var tasks []Task
-	result := r.db.Find(&tasks)
+	result := r.db.Unscoped().Where("deleted_at IS NULL").Find(&tasks)
 	if result.Error != nil {
 		return tasks, result.Error
 	}

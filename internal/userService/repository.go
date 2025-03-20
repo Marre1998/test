@@ -1,6 +1,9 @@
 package userService
 
-import "gorm.io/gorm"
+import (
+	"PetProject/internal/taskService"
+	"gorm.io/gorm"
+)
 
 type UserRepository interface {
 	CreateUser(user User) (User, error)
@@ -36,12 +39,27 @@ func (r *userRepository) UpdateUserByID(id uint, user User) (User, error) {
 	return existingUser, nil
 }
 
+// filepath: c:\Users\Admin\Desktop\ПетПроект\test\internal\userService\repository.go
 func (r *userRepository) DeleteUserByID(id uint) error {
-	result := r.db.Select("Tasks").Delete(&User{}, id) // GORM удалит задачи автоматически
-	if result.Error != nil {
-		return result.Error
-	}
-	return nil
+    return r.db.Transaction(func(tx *gorm.DB) error {
+        // Find the user
+		var user User
+		if err := tx.First(&user, id).Error; err != nil {
+			return err
+		}
+
+        // Delete associated tasks
+        if err := tx.Where("user_id = ?", id).Delete(&taskService.Task{}).Error; err != nil {
+            return err
+        }
+
+        // Delete the user
+        if err := tx.Delete(&user).Error; err != nil {
+            return err
+        }
+
+        return nil
+    })
 }
 
 func (r *userRepository) GetAllUsers() ([]User, error) {
